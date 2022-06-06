@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>Input</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0-beta1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-0evHe/X+R7YkIZDRvuzKMRqM+OrBnVFBL6DOitfPri4tjfHxaWutUpFmBp4vmVor" crossorigin="anonymous">
+  </head>
+
+  <body>
+    <template id="cell-temp">
+      <input type="checkbox" name="cell"/>
+    </template>
+
+    <div id="info" class="toast hide bottom-0 end-0 position-absolute m-4" roll="alert" aria-live="assertive" aria-atomic="true">
+      <!--ヘッダー-->
+      <div class="toast-header">
+          <strong class="me-auto">LifeGame Input Helpe</strong>
+          <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+      <!--ボディ-->
+      <div id="info_text" class="toast-body">
+      </div>
+    </div>
+
+    <div >
+      <h1>LifeGame Input Helper</h1>
+    </div>
+
+    <div id="grid_parent">
+      <div id="grid"></div>
+    </div>
+
+    <div class="inputs" align="center">
+      <button type="button" id="step" class="btn btn-success btn-lg">世代を進める</button>
+      <br>
+      <br>
+      <label for="random_threshold" class="form-label" >ランダムの閾値</label>
+      <input type="range" class="form-range" id="random_threshold" value="50">
+      <br>
+      <br>
+      <div align="center">
+        <button type="button" id="clear" class="btn btn-outline-danger">クリア</button>
+        <button type="button" id="random" class="btn btn-outline-dark">ランダム</button>
+        <button type="button" id="copy" class="btn btn-outline-primary">状態をコピー</button>
+      </div>
+      <br>
+      <br>
+      <div align="center">
+        <button type="button" id="save" class="btn btn-outline-secondary">状態を一時保存</button>
+        <button type="button" id="load" class="btn btn-outline-secondary">一時保存した状態をロード</button>
+      </div>
+    </div>
+  </body>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0-beta1/dist/js/bootstrap.bundle.min.js" integrity="sha384-pprn3073KE6tl6bjs2QrFaJGz5/SUsLqktiwsUTF55Jfv3qYSDhgCecCxMW52nD2" crossorigin="anonymous"></script>
+  <script>
+    function copyToClipboard(text){
+      const pre = document.createElement('pre');
+      pre.style.webkitUserSelect = 'auto';
+      pre.style.userSelect = 'auto';
+      pre.textContent = text;
+      document.body.appendChild(pre);
+      document.getSelection().selectAllChildren(pre);
+      const result = document.execCommand('copy');
+      document.body.removeChild(pre);
+      return result;
+    }
+
+    const grid_side_size = 80;
+    const template = document.getElementById("cell-temp");
+    for (var i = 0; i < grid_side_size; i++) {
+      for (var j = 0; j < grid_side_size; j++) {
+        const clone = template.content.cloneNode(true);
+        document.getElementById("grid").appendChild(clone);
+      }
+    }
+
+    const gridarea = document.getElementById("grid_parent");
+    var is_mouse_down = false;
+    gridarea.addEventListener("mousedown", function () {
+      is_mouse_down = true;
+    });
+    gridarea.addEventListener("mouseup", function () {
+      is_mouse_down = false;
+    });
+
+    const cells = document.querySelectorAll('input[type="checkbox"]');
+    var index=0;
+    cells.forEach(function (cell) {
+      cell.addEventListener("mouseenter", function () {
+        if (is_mouse_down) {
+          cell.checked = !cell.checked;
+        }
+      });
+      cell.addEventListener("mousedown", function () {
+        cell.checked = !cell.checked;
+      });
+      cell.addEventListener("click", function (e) {
+        e.preventDefault();
+      });
+      cell.id="cell_" + index.toString();
+      index+=1;
+    });
+
+    const random_threshold = document.getElementById("random_threshold");
+    var random_threshold_value = 0.5;
+    random_threshold.addEventListener("change", function () {
+      random_threshold_value = random_threshold.value/100;
+    });
+
+    const clear_button = document.getElementById("clear");
+    clear_button.addEventListener("click", function () {
+      cells.forEach(function (cell) {
+        cell.checked = false;
+      });
+    });
+
+    const random_button = document.getElementById("random");
+    random_button.addEventListener("click", function () {
+      cells.forEach(function (cell) {
+        cell.checked = Math.random() > random_threshold_value;
+      });
+    });
+
+    const copy_button = document.getElementById("copy");
+    const data_name="CELLS";
+    copy_button.addEventListener("click", function () {
+      const padding_str_first=data_name + ", ";
+      var padding_str="";
+      for(var i=0;i<padding_str_first.length;i++){
+        padding_str+=" ";
+      }
+      const cells_str_prefix="HEX ";
+
+      var cells_str="";
+      var cells_str_bin="";
+
+      cells.forEach(function (cell) {
+        cells_str_bin += cell.checked ? "1" : "0";
+        if(cells_str_bin.length == 16){
+          const cells_num = parseInt(cells_str_bin, 2);
+          var cells_str_hex = cells_num.toString(16);
+          cells_str_hex = cells_str_hex.toUpperCase();
+          cells_str_hex = cells_str_hex.padStart(4, "0");
+          cells_str += padding_str + cells_str_prefix + cells_str_hex + "\n";
+          cells_str_bin = "";
+        }
+      });
+
+      cells_str = padding_str_first + cells_str.substr(padding_str_first.length)
+      copyToClipboard(cells_str);
+    });
+
+    function get_cell(cells,x,y){
+      return cells[y*grid_side_size+x];
+    }
+
+    function get_around_cells_state_sum(cells,ind){
+      var around_cells_state_sum=0;
+      var x=ind%grid_side_size;
+      var y=Math.floor(ind/grid_side_size);
+      //life gameのルールに従って周囲のセルを取得
+      for(var i=-1;i<=1;i++){
+        for(var j=-1;j<=1;j++){
+          if(i==0 && j==0){
+            continue;
+          }
+          var x_ = x+i;
+          var y_ = y+j;
+          if(x_<0||x_>=grid_side_size||y_<0||y_>=grid_side_size){
+            continue;
+          }
+          const cell = get_cell(cells,x_,y_);
+          around_cells_state_sum += cell.checked ? 1 : 0;
+        }
+      }
+      return around_cells_state_sum;
+    }
+    const step_button = document.getElementById("step");
+    step_button.addEventListener("click", function () {
+      var next_cells = [];
+      var index = 0;
+      cells.forEach(function (cell) {
+        const sum = get_around_cells_state_sum(cells,index);
+        var next_state = false;
+        if(cell.checked){
+          if(sum<2||sum>3){
+            next_state = false;
+          }else{
+            next_state = true;
+          }
+        }else{
+          if(sum==3){
+            next_state = true;
+          }else{
+            next_state = false;
+          }
+        }
+        next_cells.push(next_state);
+        index += 1;
+      });
+      index = 0;
+      cells.forEach(function (cell) {
+        cell.checked = next_cells[index];
+        index += 1;
+      });
+    });
+
+    //info
+    let toastElemList = [].slice.call(document.querySelectorAll('.toast'));
+    let toastList = toastElemList.map(function (toastElem){
+        let toast = new bootstrap.Toast(toastElem, {autohide: false});
+        return toast;
+    });
+    const info_text = document.getElementById("info_text");
+    function notify(text){
+      info_text.innerText = text;
+      toastList.forEach(function (toast) {
+        toast.show();
+      });
+    }
+
+    //cellのchakedをsaveする
+    var cells_states=[]
+    function save_cells(){
+      cells_states=[]
+      cells.forEach(function (cell) {
+        cells_states.push(cell.checked);
+      });
+    }
+    const save_button = document.getElementById("save");
+    save_button.addEventListener("click", function () {
+      notify("セーブしました");
+      save_cells();
+    });
+
+    //cellのchakedをloadする
+    function load_cells(){
+      var ind = 0;
+      cells.forEach(function (cell) {
+        cell.checked = cells_states[ind];
+        ind += 1;
+      });
+    }
+    const load_button = document.getElementById("load");
+    load_button.addEventListener("click", function () {
+      notify("ロードしました");
+      load_cells();
+    });
+  </script>
+  <style>
+    h1{
+      margin-top: 20px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    #grid_parent {
+      display:block;
+      margin-top: 20px;
+      margin-bottom: 20px;
+      width: 900px;
+      height: 900px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(80, 10px);
+      grid-template-rows: repeat(80, 10px);
+      grid-gap: 1px;
+    }
+    .inputs {
+      width: 400px;
+      margin-left: auto;
+      margin-right: auto;
+      margin-top: 20px;
+      margin-bottom: 20px;
+    }
+  </style>
+</html>
